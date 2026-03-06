@@ -1077,19 +1077,30 @@ function fetchAvailability(){
     var url='https://www.googleapis.com/calendar/v3/calendars/'
       +encodeURIComponent(GCAL_CAL)+'/events?key='+GCAL_KEY
       +'&timeMin='+encodeURIComponent(now.toISOString())
-      +'&timeMax='+encodeURIComponent(new Date(now.getTime()+90*864e5).toISOString())
+      +'&timeMax='+encodeURIComponent(new Date(now.getTime()+365*864e5).toISOString())
       +'&singleEvents=true&orderBy=startTime&maxResults=50';
     xhr.open('GET',url,true);
     xhr.onload=function(){
       try {
         var data=JSON.parse(xhr.responseText);
+        function parseDay(s){
+          if(!s) return null;
+          if(s.length===10){ var p=s.split('-'); return new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])); }
+          var dt=new Date(s); dt.setHours(0,0,0,0); return dt;
+        }
         var busy=(data.items||[]).map(function(ev){
-          return {start:new Date(ev.start.date||ev.start.dateTime),end:new Date(ev.end.date||ev.end.dateTime)};
-        });
-        var d=new Date(now); d.setHours(0,0,0,0); d.setDate(d.getDate()+1);
-        for(var i=0;i<90;i++){
-          if(d.getDay()!==0&&d.getDay()!==6){
-            if(!busy.some(function(b){ return d>=b.start&&d<b.end; })){
+          var s=parseDay(ev.start.date||ev.start.dateTime);
+          var e=parseDay(ev.end.date||ev.end.dateTime);
+          // Google all-day events: end is exclusive, subtract 1 day
+          if(e) e=new Date(e.getTime()-864e5);
+          return {start:s,end:e};
+        }).filter(function(b){return b.start&&b.end;});
+        var d=new Date(now); d.setHours(0,0,0,0);
+        for(var i=0;i<365;i++){
+          var dow=d.getDay();
+          if(dow!==0&&dow!==6){
+            var ts=d.getTime();
+            if(!busy.some(function(b){ return ts>=b.start.getTime()&&ts<=b.end.getTime(); })){
               el.textContent=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
               return;
             }
