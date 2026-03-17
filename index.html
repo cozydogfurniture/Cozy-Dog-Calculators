@@ -104,6 +104,8 @@ header{background:var(--black);border-bottom:3px solid var(--gold);padding:0 16p
 .btn-gold:hover{background:var(--gold2);color:var(--white);}
 .btn-outline{background:none;border:1.5px solid var(--border);color:var(--muted);}
 .btn-full{width:100%;margin-top:10px;}
+.btn-fb{background:#1877f2;color:#fff;border-color:#1877f2;}
+.btn-fb:hover{background:#1565d8;border-color:#1565d8;}
 
 /* Pieces */
 .pieces-list{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
@@ -305,6 +307,17 @@ header{background:var(--black);border-bottom:3px solid var(--gold);padding:0 16p
         </div>
       </div>
 
+      <div class="grid2" style="margin-top:8px">
+        <div>
+          <label class="fl">Client Name</label>
+          <input class="fi" id="q-client-name" type="text" placeholder="e.g. Sarah">
+        </div>
+        <div>
+          <label class="fl">Project Name</label>
+          <input class="fi" id="q-project-name" type="text" placeholder="e.g. Kitchen Island">
+        </div>
+      </div>
+
       <div class="quote-box">
         <div class="q-lbl">Client Quote</div>
         <div class="q-amt" id="q-quote">$—</div>
@@ -329,6 +342,25 @@ header{background:var(--black);border-bottom:3px solid var(--gold);padding:0 16p
         </div>
       </div>
       <button class="btn btn-gold btn-full btn-print" id="btn-print-bb">🖨 Print Quote</button>
+      <button class="btn btn-fb btn-full" id="btn-preview-msg">📋 Preview Marketplace Message</button>
+      <div id="msg-preview-panel" style="display:none;margin-top:12px;">
+        <label class="fl" style="margin-bottom:4px;">Edit message before copying</label>
+        <textarea id="msg-preview-text" style="width:100%;box-sizing:border-box;min-height:220px;font-family:inherit;font-size:.82rem;line-height:1.55;padding:10px;border:1.5px solid var(--border);border-radius:8px;background:#fffbec;color:var(--black);resize:vertical;"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="btn btn-fb" id="btn-copy-msg" style="flex:1;margin-top:0;">📋 Copy to Clipboard</button>
+          <button class="btn btn-outline" id="btn-close-preview" style="flex:0 0 auto;margin-top:0;padding:0 14px;">✕</button>
+        </div>
+        <div id="msg-confirm" style="display:none;text-align:center;font-size:.8rem;color:var(--green);font-weight:700;margin-top:6px;">✔ Message copied to clipboard!</div>
+        <div id="save-prospect-bar" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
+          <div style="font-size:.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Save to Prospects Sheet</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-gold" id="btn-save-lead" style="flex:1;margin-top:0;">Save as Lead</button>
+            <button class="btn btn-gold" id="btn-save-prospect" style="flex:1;margin-top:0;">Save as Prospect</button>
+          </div>
+          <div id="save-confirm" style="display:none;text-align:center;font-size:.8rem;color:var(--green);font-weight:700;margin-top:6px;">✔ Saved to sheet!</div>
+          <div id="save-error" style="display:none;text-align:center;font-size:.8rem;color:#c0392b;font-weight:700;margin-top:6px;">Could not save. Check connection and try again.</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -536,7 +568,8 @@ header{background:var(--black);border-bottom:3px solid var(--gold);padding:0 16p
 'use strict';
 
 /* ── credentials ───────────────────────────── */
-var GCAL_KEY = 'AIzaSyA6WyBiiN81u-Ng90PStk668VTreb8PRS0';
+var GCAL_KEY = 'AIzaSyCQ1IruX4bYdOFjcBeb2CbAaB0JrE1qZKg';
+var SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzdx0jothZ76qqDAHU_PplgXUjvAMKPygwv5Eg5nxVUYXkDrFLinFGlVBahCL1O6DOB_g/exec';
 var GCAL_CAL = 'fc4846ac9cd0a903ea973404737d5eda968ca68bfbdd3e8d40b5b7d1c4cb7f8e@group.calendar.google.com';
 
 /* ── supplier data ─────────────────────────── */
@@ -1077,30 +1110,19 @@ function fetchAvailability(){
     var url='https://www.googleapis.com/calendar/v3/calendars/'
       +encodeURIComponent(GCAL_CAL)+'/events?key='+GCAL_KEY
       +'&timeMin='+encodeURIComponent(now.toISOString())
-      +'&timeMax='+encodeURIComponent(new Date(now.getTime()+365*864e5).toISOString())
-      +'&singleEvents=true&orderBy=startTime&maxResults=50&_='+Date.now();
+      +'&timeMax='+encodeURIComponent(new Date(now.getTime()+90*864e5).toISOString())
+      +'&singleEvents=true&orderBy=startTime&maxResults=50';
     xhr.open('GET',url,true);
     xhr.onload=function(){
       try {
         var data=JSON.parse(xhr.responseText);
-        function parseDay(s){
-          if(!s) return null;
-          if(s.length===10){ var p=s.split('-'); return new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])); }
-          var dt=new Date(s); dt.setHours(0,0,0,0); return dt;
-        }
         var busy=(data.items||[]).map(function(ev){
-          var s=parseDay(ev.start.date||ev.start.dateTime);
-          var e=parseDay(ev.end.date||ev.end.dateTime);
-          // Google all-day events: end is exclusive, subtract 1 day
-          if(e) e=new Date(e.getTime()-864e5);
-          return {start:s,end:e};
-        }).filter(function(b){return b.start&&b.end;});
-        var d=new Date(now); d.setHours(0,0,0,0);
-        for(var i=0;i<365;i++){
-          var dow=d.getDay();
-          if(dow!==0&&dow!==6){
-            var ts=d.getTime();
-            if(!busy.some(function(b){ return ts>=b.start.getTime()&&ts<=b.end.getTime(); })){
+          return {start:new Date(ev.start.date||ev.start.dateTime),end:new Date(ev.end.date||ev.end.dateTime)};
+        });
+        var d=new Date(now); d.setHours(0,0,0,0); d.setDate(d.getDate()+1);
+        for(var i=0;i<90;i++){
+          if(d.getDay()!==0&&d.getDay()!==6){
+            if(!busy.some(function(b){ return d>=b.start&&d<b.end; })){
               el.textContent=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
               return;
             }
@@ -1113,6 +1135,113 @@ function fetchAvailability(){
     xhr.onerror=function(){ el.textContent='Unavailable'; };
     xhr.send();
   } catch(e){ el.textContent='Open in browser to check'; }
+}
+
+/* ── marketplace message ───────────────────── */
+function fallbackCopy(text){
+  var ta=document.createElement('textarea');
+  ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  var c=$('msg-confirm'); if(c){ c.style.display='block'; setTimeout(function(){ c.style.display='none'; },3000); }
+  var sb=$('save-prospect-bar'); if(sb) sb.style.display='block';
+}
+function buildMarketplaceMessage(){
+  var clientName=($('q-client-name').value||'').trim();
+  var projectName=($('q-project-name').value||'').trim();
+  var quoteEl=$('q-quote');
+  var quoteText=quoteEl?quoteEl.textContent.trim():'';
+  var availText=$('avail-val')?$('avail-val').textContent.trim():'';
+
+  // Build species/dimensions summary from pieces array
+  var pieceLines=pieces.map(function(p){
+    return '  - '+p.name+(p.label?' ('+p.label+')':'')+' - '+p.bf.toFixed(1)+' BF';
+  });
+
+  var lines=[];
+
+  // Greeting
+  lines.push('Thanks for the details'+(clientName?', '+clientName:'')+'!');
+  lines.push('');
+
+  // Project details
+  if(pieceLines.length){
+    lines.push('Project Details:');
+    pieceLines.forEach(function(l){ lines.push(l); });
+    lines.push('');
+  }
+
+  // Quote
+  if(quoteText && quoteText!=='$\u2014'){
+    lines.push('Quote: '+quoteText);
+    lines.push('');
+  }
+
+  // Next available
+  if(availText && availText!=='Checking...' && availText!=='Unavailable'){
+    lines.push('Next Available Start Date: '+availText);
+    lines.push('');
+  }
+
+  // Build time & deposit
+  lines.push('Typical build time is 3-6 weeks depending on project complexity.');
+  lines.push('A 50% deposit is required to secure your reservation.');
+  lines.push('');
+
+
+
+  return lines.join('\n');
+}
+
+/* ── prospect sheet save ──────────────────── */
+function saveProspect(status){
+  var clientName=($('q-client-name').value||'').trim();
+  var projectName=($('q-project-name').value||'').trim();
+  var quoteText=($('q-quote')?$('q-quote').textContent.trim():'');
+  var availText=($('avail-val')?$('avail-val').textContent.trim():'');
+
+  // Dimensions: summarize from pieces
+  var dims=pieces.map(function(p){ return p.bf.toFixed(1)+' BF'; }).join(', ');
+
+  // Wood species: unique names from pieces
+  var woods=[];
+  pieces.forEach(function(p){
+    var sp=p.label?p.label.split(' ')[0]:p.name;
+    if(woods.indexOf(sp)===-1) woods.push(sp);
+  });
+  var wood=woods.join(', ');
+
+  var data={
+    date: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+    clientName: clientName,
+    projectName: projectName,
+    dimensions: dims,
+    wood: wood,
+    quote: quoteText,
+    nextAvailable: availText,
+    status: status
+  };
+
+  var saveConfirm=$('save-confirm');
+  var saveError=$('save-error');
+  var saveBar=$('save-prospect-bar');
+  if(saveConfirm) saveConfirm.style.display='none';
+  if(saveError) saveError.style.display='none';
+
+  var xhr=new XMLHttpRequest();
+  xhr.open('POST', SHEETS_URL, true);
+  xhr.setRequestHeader('Content-Type','text/plain');
+  xhr.onload=function(){
+    try{
+      var res=JSON.parse(xhr.responseText);
+      if(res.status==='ok'){
+        if(saveConfirm){ saveConfirm.style.display='block'; setTimeout(function(){ saveConfirm.style.display='none'; if(saveBar) saveBar.style.display='none'; },3000); }
+      } else { if(saveError) saveError.style.display='block'; }
+    } catch(e){ if(saveError) saveError.style.display='block'; }
+  };
+  xhr.onerror=function(){ if(saveError) saveError.style.display='block'; };
+  xhr.send(JSON.stringify(data));
 }
 
 /* ── wire all events ───────────────────────── */
@@ -1178,6 +1307,34 @@ function wire(){
   /* print */
   on('btn-print-bb','click',function(){ window.print(); });
   on('btn-print-k', 'click',function(){ window.print(); });
+  on('btn-preview-msg','click',function(){
+    var ta=$('msg-preview-text');
+    var panel=$('msg-preview-panel');
+    if(ta) ta.value=buildMarketplaceMessage();
+    if(panel) panel.style.display='block';
+    if(ta) ta.focus();
+  });
+  on('btn-close-preview','click',function(){
+    var panel=$('msg-preview-panel'); if(panel) panel.style.display='none';
+    var c=$('msg-confirm'); if(c) c.style.display='none';
+    var sb=$('save-prospect-bar'); if(sb) sb.style.display='none';
+  });
+  on('btn-save-lead','click',function(){ saveProspect('Lead'); });
+  on('btn-save-prospect','click',function(){ saveProspect('Prospect'); });
+  on('btn-copy-msg','click',function(){
+    var ta=$('msg-preview-text');
+    var msg=ta?ta.value:buildMarketplaceMessage();
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(msg).then(function(){
+        var c=$('msg-confirm'); if(c){ c.style.display='block'; setTimeout(function(){ c.style.display='none'; },3000); }
+        var sb=$('save-prospect-bar'); if(sb) sb.style.display='block';
+      }).catch(function(){
+        fallbackCopy(msg);
+      });
+    } else {
+      fallbackCopy(msg);
+    }
+  });
 
   /* kennel sizes */
   document.querySelectorAll('#k-size-grid .opt-btn').forEach(function(btn){
